@@ -11,10 +11,11 @@ todo
 
 ---
 
-RPC CONFIG
-
-    2.5 request per second on free 
-    40 request per second on premium
+RPC CONFIG (rate-limits)
+    ```yaml
+    - "2.5 request per second on free, both pre-balance and no pre-balance equal to 1 txs per second"
+    - "40 request per second on premium, pre-balance equal to 10 txs per second, no pre-balance equal to 13 txs per second"
+    ```
 
 
 SOLANATX

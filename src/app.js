@@ -1,6 +1,7 @@
 import express from 'express';
 import { errorHandler } from './core/middleware/error-handler.js';
 import { ApiError } from './core/errors/api-error.js';
+import { buildRateLimiters } from './core/middleware/rate-limit.js';
 
 // Wallet feature
 import { createWalletHandler } from './features/wallet/create-wallet.handler.js';
@@ -32,28 +33,31 @@ app.use(express.json({ limit: '10mb' }));
 // Base router for /api/v1 per OpenAPI
 const v1 = express.Router();
 
+// Rate limiters per tier
+const { advancedWithPre, advancedWithoutPre, regular } = buildRateLimiters();
+
 // Wallet routes
-v1.post('/wallet/create', createWalletHandler);
-v1.get('/wallet/:publicKey/balance/sol', getSolBalanceHandler);
+v1.post('/wallet/create', regular, createWalletHandler);
+v1.get('/wallet/:publicKey/balance/sol', regular, getSolBalanceHandler);
 // SPL routes
-v1.get('/spl/:mintAddress/balance/:walletPublicKey', getSplBalanceHandler);
+v1.get('/spl/:mintAddress/balance/:walletPublicKey', regular, getSplBalanceHandler);
 // SOL routes
-v1.post('/sol/get-transfer-transaction', getTransferTransactionHandler);
-v1.post('/sol/advanced-transfer', advancedTransferHandler);
-// Pump.fun routes
-v1.post('/pump/get-create-transaction', getCreateTransactionHandler);
-v1.post('/pump/get-buy-transaction', getBuyTransactionHandler);
-v1.post('/pump/get-sell-transaction', getSellTransactionHandler);
-// Pump.fun Advanced routes
-v1.post('/pump/advanced-create', createAdvancedHandler);
-v1.post('/pump/advanced-buy', buyAdvancedHandler);
-v1.post('/pump/advanced-sell', sellAdvancedHandler);
-// Upload routes
-v1.post('/upload/pinata-image', uploadPinataImageHandler);
-// Blockchain routes
-v1.post('/blockchain/send-transaction', sendTransactionHandler);
-v1.get('/blockchain/transaction-status/:signature', getTransactionStatusHandler);
-v1.post('/blockchain/sign-transaction', signTransactionHandler);
+v1.post('/sol/get-transfer-transaction', regular, getTransferTransactionHandler);
+v1.post('/sol/advanced-transfer', advancedWithPre, advancedTransferHandler);
+// Pump.fun routes (regular)
+v1.post('/pump/get-create-transaction', regular, getCreateTransactionHandler);
+v1.post('/pump/get-buy-transaction', regular, getBuyTransactionHandler);
+v1.post('/pump/get-sell-transaction', regular, getSellTransactionHandler);
+// Pump.fun Advanced routes (advancedWithoutPre)
+v1.post('/pump/advanced-create', advancedWithoutPre, createAdvancedHandler);
+v1.post('/pump/advanced-buy', advancedWithoutPre, buyAdvancedHandler);
+v1.post('/pump/advanced-sell', advancedWithoutPre, sellAdvancedHandler);
+// Upload routes (treat as regular for simplicity)
+v1.post('/upload/pinata-image', regular, uploadPinataImageHandler);
+// Blockchain routes (regular)
+v1.post('/blockchain/send-transaction', regular, sendTransactionHandler);
+v1.get('/blockchain/transaction-status/:signature', regular, getTransactionStatusHandler);
+v1.post('/blockchain/sign-transaction', regular, signTransactionHandler);
 
 // Mount under /api/v1
 app.use('/api/v1', v1);

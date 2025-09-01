@@ -2,7 +2,7 @@ node_modules/
 
 .iteration/ //fix
 old //fix
-.env
+.env 
 .windsurf //fix
 command-test.md //fix
 orchestrator.md //fix
