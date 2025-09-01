@@ -1,0 +1,689 @@
+Understood. The new principles in version 1.1 place a strong emphasis on being **"Vanilla-First & Docs-Heavy"** to maximize the one-shot success rate of LLMs. This is a crucial adjustment. The key takeaway is to prioritize technologies that are so common and well-documented that an LLM can generate correct code without needing niche, context-specific training.
+
+Your note to **move from TypeScript to JavaScript** is the most significant change driven by this. While TypeScript offers compile-time safety, the new principles value the vast amount of existing JavaScript documentation, tutorials, and examples as a more critical asset for LLM performance. We will use **JSDoc** for type annotations and **Zod** for runtime validation to maintain contract integrity without a compilation step.
+
+Let's re-evaluate our choices and generate the final refactoring plan based on these new principles.
+
+1.  **Architecture:** Vertical Slices. **(No change)**. This is still the best choice and is strongly supported by the new principles ("prefer feature folders over layer folders").
+2.  **Interface:** OpenAPI Specification. **(No change)**. This is still the best choice. It provides a clear, schema-defined contract that is language-agnostic and machine-readable, aligning perfectly with "boundary_contract" and "schema-validated contracts."
+3.  **Logic:** Hyper-Granular Primitives. **(No change)**. This remains the correct approach, pushing complexity to the orchestrator and keeping the API primitives simple and raw.
+4.  **Tech Stack:** TypeScript -> **JavaScript (ESM) with JSDoc + Zod**. This is the key change. We will use modern JavaScript (ES Modules) for its simplicity and direct execution model (no build step). We will enforce our contracts at runtime using Zod and provide type hints for LLMs and editors using JSDoc. This combination satisfies "vanilla_first_core" and "docs_heavy_choice."
+
+With these adjustments, here is the revised and final refactoring plan.
+
+---
+
+# Refactoring Plan: Blockchain Primitives API (v1.1)
+
+## 1. Project Overview
+
+This document outlines the plan to refactor the existing Node.js application from a flow-based API into a set of **raw, composable, and stateless primitives**.
+
+The primary consumer of this new API will be an **Orchestrator Service**. The orchestrator will be responsible for composing these raw primitives into complex workflows for applications like token bundlers, volume bots, and other on-chain automation tools.
+
+The key objectives of this refactor are:
+*   **Decoupling:** Separate the logic for *constructing* transactions from the logic for *signing and sending* them.
+*   **Flexibility:** Empower the orchestrator with maximum control over transaction sequencing, bundling, and execution strategy.
+*   **Security:** Eliminate the need for the API to handle user private keys for trading operations.
+*   **LLM One-Shot Success:** Design a codebase so simple, well-documented, and based on common patterns that an LLM can reliably implement new features in a single attempt.
+
+## 2. Guiding Principles
+
+This refactor will strictly adhere to the **"Maximize Locality, Minimize Indirection — Vanilla-First & Docs-Heavy"** principle (v1.1).
+
+*   **Core Statement:** Keep a feature’s concept, code, config, and contract close together (high locality) and reduce layers, tools, and hidden mechanisms (low indirection). Prefer vanilla implementations by default; introduce small, well-documented libraries only when they add clarity without indirection.
+*   **Key Maxims:**
+    *   **Vanilla-First Core:** Use standard JavaScript and Node.js APIs wherever possible.
+    *   **Docs-Heavy Choice:** Select libraries (like Express, Zod, @solana/web3.js) with extensive public documentation, examples, and community support.
+    *   **Predictable APIs:** Avoid "magic" or reflection-heavy libraries.
+    *   **One Tool Per Concern:** Use a single, focused tool for routing (Express), validation (Zod), etc.
+
+## 3. Core Architectural Decisions
+
+Based on the v1.1 principles, the following high-level decisions have been made:
+
+| Category      | Decision                                                              | Rationale                                                                                                                                                             |
+| :------------ | :-------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Architecture**  | **Vertical Slices**                                                   | Maximizes locality by co-locating all code for a single feature (handler, schema) in a dedicated folder. Extremely LLM-friendly.                                     |
+| **Interface**     | **OpenAPI (Swagger) Specification**                                   | Provides a strict, machine-readable contract as the single source of truth. Enables auto-generation of clients, documentation, and a clear target for validation.        |
+| **Logic**         | **Hyper-Granular Primitives**                                         | The API's role is to **construct unsigned transactions**. The orchestrator is responsible for signing and broadcasting them, providing maximum flexibility and security. |
+| **Tech Stack**    | **JavaScript (ESM) + JSDoc + Zod**                                    | Prioritizes the "Docs-Heavy" principle by using JavaScript, the most documented language for web APIs. JSDoc provides type hints for LLMs/editors, and Zod ensures strict runtime validation without a build step. |
+
+## 4. New Repository Structure
+
+The refactored repository will be organized into vertical slices using modern JavaScript (ESM).
+
+```
+/
+├── .github/
+│   └── workflows/
+│       └── ci.yaml         # Lint, test
+├── src/
+│   ├── core/               # Singleton Zone: Cross-cutting concerns
+│   │   ├── solana/
+│   │   │   ├── connection.js
+│   │   │   └── rpc-config.js
+│   │   ├── errors/
+│   │   │   └── api-error.js
+│   │   └── middleware/
+│   │       └── error-handler.js
+│   │
+│   ├── features/           # Feature Slice Zone: Each folder is a raw capability
+│   │   ├── blockchain/
+│   │   │   ├── send-transaction.handler.js
+│   │   │   ├── send-transaction.schema.js
+│   │   │   └── transaction-status.handler.js
+│   │   │   └── transaction-status.schema.js
+│   │   │
+│   │   ├── jupiter/
+│   │   │   ├── get-quote.handler.js
+│   │   │   ├── get-quote.schema.js
+│   │   │   └── get-swap-transaction.handler.js
+│   │   │   └── get-swap-transaction.schema.js
+│   │   │
+│   │   ├── pump/
+│   │   │   ├── get-buy-transaction.handler.js
+│   │   │   ├── get-buy-transaction.schema.js
+│   │   │   ├── get-sell-transaction.handler.js
+│   │   │   └── get-sell-transaction.schema.js
+│   │   │   └── get-create-transaction.handler.js
+│   │   │   └── get-create-transaction.schema.js
+│   │   │
+│   │   ├── bonk/
+│   │   │   ├── get-buy-transaction.handler.js
+│   │   │   ├── get-sell-transaction.handler.js
+│   │   │   └── get-create-transaction.handler.js
+│   │   │   └── (and their .schema.js files)
+│   │   │
+│   │   ├── spl/
+│   │   │   ├── get-balance.handler.js
+│   │   │   └── get-balance.schema.js
+│   │   │
+│   │   └── wallet/
+│   │       ├── create-wallet.handler.js
+│   │       ├── create-wallet.schema.js
+│   │       └── get-sol-balance.handler.js
+│   │       └── get-sol-balance.schema.js
+│   │
+│   ├── app.js              # Express app setup, middleware, and feature routing
+│   └── server.js           # Entry point: starts the server
+│
+├── openapi.yaml            # Single source of truth for the API contract
+├── package.json
+├── .eslintrc.js
+├── .gitignore
+└── README.md
+```
+
+## 5. API Contract (openapi.yaml)
+
+*(This section remains unchanged from the previous version, as the external contract is independent of the implementation language.)*
+
+```yaml
+openapi: 3.0.3
+info:
+  title: "Blockchain Primitives API"
+  version: "1.0.0"
+  description: "A set of raw, composable, and stateless primitives for a blockchain orchestrator."
+servers:
+  - url: "/api/v1"
+
+paths:
+  /wallet/create:
+    post:
+      summary: "Create a new Solana wallet"
+      tags: [Wallet]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  description: "Number of wallets to create. Defaults to 1."
+                  default: 1
+      responses:
+        '200':
+          description: "Successfully created wallet(s)"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessWalletArray'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /wallet/{publicKey}/balance/sol:
+    get:
+      summary: "Get the SOL balance of a wallet"
+      tags: [Wallet]
+      parameters:
+        - name: publicKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "SOL balance retrieved successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessSolBalance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /spl/{mintAddress}/balance/{walletPublicKey}:
+    get:
+      summary: "Get the SPL token balance of a wallet"
+      tags: [SPL]
+      parameters:
+        - name: mintAddress
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: walletPublicKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "SPL token balance retrieved successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessSplBalance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /sol/get-transfer-transaction:
+    post:
+      summary: "Get an unsigned SOL transfer transaction"
+      tags: [SOL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fromPublicKey:
+                  type: string
+                toPublicKey:
+                  type: string
+                amountSol:
+                  type: number
+              required: [fromPublicKey, toPublicKey, amountSol]
+      responses:
+        '200':
+          description: "Unsigned transaction created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessUnsignedTx'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /pump/get-create-transaction:
+    post:
+      summary: "Get an unsigned transaction to create a new token on Pump.fun"
+      tags: [Pump.fun]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                creatorPublicKey:
+                  type: string
+                name:
+                  type: string
+                symbol:
+                  type: string
+                description:
+                  type: string
+                imageUrl:
+                  type: string
+                twitter:
+                  type: string
+                telegram:
+                  type: string
+                website:
+                  type: string
+              required: [creatorPublicKey, name, symbol, description, imageUrl]
+      responses:
+        '200':
+          description: "Unsigned create transaction created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessUnsignedTx'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /pump/get-buy-transaction:
+    post:
+      summary: "Get an unsigned transaction to buy a token on Pump.fun"
+      tags: [Pump.fun]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                buyerPublicKey:
+                  type: string
+                mintAddress:
+                  type: string
+                solAmount:
+                  type: number
+                slippageBps:
+                  type: integer
+              required: [buyerPublicKey, mintAddress, solAmount, slippageBps]
+      responses:
+        '200':
+          description: "Unsigned buy transaction created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessUnsignedTx'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /pump/get-sell-transaction:
+    post:
+      summary: "Get an unsigned transaction to sell a token on Pump.fun"
+      tags: [Pump.fun]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sellerPublicKey:
+                  type: string
+                mintAddress:
+                  type: string
+                tokenAmount:
+                  type: string # String to handle large numbers without precision loss
+                slippageBps:
+                  type: integer
+              required: [sellerPublicKey, mintAddress, tokenAmount, slippageBps]
+      responses:
+        '200':
+          description: "Unsigned sell transaction created successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessUnsignedTx'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Note: Bonk.fun and Jupiter endpoints will follow the same pattern as Pump.fun
+  # (e.g., /bonk/get-buy-transaction, /jupiter/get-swap-transaction)
+
+  /blockchain/send-transaction:
+    post:
+      summary: "Send a signed and serialized transaction to the blockchain"
+      tags: [Blockchain]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signedTx:
+                  type: string
+                  description: "Base64 encoded, signed, and serialized transaction"
+              required: [signedTx]
+      responses:
+        '200':
+          description: "Transaction sent successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessTxSignature'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /blockchain/transaction-status/{signature}:
+    get:
+      summary: "Get the status of a transaction"
+      tags: [Blockchain]
+      parameters:
+        - name: signature
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "Status retrieved successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiSuccessTxStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    Wallet:
+      type: object
+      properties:
+        publicKey:
+          type: string
+        privateKey:
+          type: string
+          description: "Base58 encoded private key. ONLY returned on creation."
+      required: [publicKey, privateKey]
+
+    SolBalance:
+      type: object
+      properties:
+        publicKey:
+          type: string
+        balanceSol:
+          type: number
+        balanceLamports:
+          type: string
+      required: [publicKey, balanceSol, balanceLamports]
+
+    SplBalance:
+      type: object
+      properties:
+        walletPublicKey:
+          type: string
+        mintAddress:
+          type: string
+        uiAmount:
+          type: number
+        rawAmount:
+          type: string
+      required: [walletPublicKey, mintAddress, uiAmount, rawAmount]
+
+    UnsignedTransaction:
+      type: object
+      properties:
+        unsignedTx:
+          type: string
+          description: "Base64 encoded, unsigned, and serialized transaction"
+      required: [unsignedTx]
+
+    TransactionSignature:
+      type: object
+      properties:
+        signature:
+          type: string
+      required: [signature]
+
+    TransactionStatus:
+      type: object
+      properties:
+        signature:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, finalized, failed]
+      required: [signature, status]
+
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "INVALID_INPUT"
+        message:
+          type: string
+          example: "The provided public key is not valid."
+      required: [code, message]
+
+    ApiSuccessWalletArray:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Wallet'
+      required: [ok, data]
+
+    ApiSuccessSolBalance:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          $ref: '#/components/schemas/SolBalance'
+      required: [ok, data]
+
+    ApiSuccessSplBalance:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          $ref: '#/components/schemas/SplBalance'
+      required: [ok, data]
+
+    ApiSuccessUnsignedTx:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          $ref: '#/components/schemas/UnsignedTransaction'
+      required: [ok, data]
+
+    ApiSuccessTxSignature:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          $ref: '#/components/schemas/TransactionSignature'
+      required: [ok, data]
+
+    ApiSuccessTxStatus:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        data:
+          $ref: '#/components/schemas/TransactionStatus'
+      required: [ok, data]
+
+  responses:
+    BadRequest:
+      description: "Invalid request input"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                default: false
+              error:
+                $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: "Resource not found"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                default: false
+              error:
+                $ref: '#/components/schemas/ApiError'
+    InternalServerError:
+      description: "An unexpected error occurred"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                default: false
+              error:
+                $ref: '#/components/schemas/ApiError'
+```
+
+### **6. Refactoring Task Breakdown (Expanded)**
+
+This section provides a step-by-step guide for the LLM development team, including references to the original source files for refactoring.
+
+**Note to the LLM Team:**
+*   Execute these steps sequentially.
+*   All code must be written in **modern JavaScript (ESM)** using `import`/`export`.
+*   Use **JSDoc comments** for all functions to provide type hints.
+*   Use the **Zod** library for **runtime validation** of all API inputs.
+*   For each new endpoint, adapt the logic from the specified source files. **Do not start from scratch.** The goal is to extract and simplify existing logic into raw, stateless primitives.
+
+---
+
+### **Step 1: Project Setup & Boilerplate**
+
+For this initial setup, you primarily need to reference the project's configuration and server entry point.
+
+*   **`package.json`**
+    *   **Why it's needed:** This file is the source of truth for all required dependencies (`express`, `@solana/web3.js`, etc.). The LLM will use this list to install the correct packages for the new JavaScript project.
+
+*   **`server.js`**
+    *   **Why it's needed:** This file serves as the template for the new `src/app.js` and `src/server.js`. It shows how the Express app is initialized, how JSON middleware is applied, and how the server starts listening on a port.
+
+### **Step 2: Core Implementation**
+
+This step involves creating the shared, cross-cutting concerns of the application. The logic for these will be extracted and centralized from the old `utils` directory.
+
+*   **`src/utils/walletUtils.js`**
+    *   **Why it's needed:** The `getSolanaConnection` function is the direct source for the new singleton connection manager in `src/core/solana/connection.js`.
+
+*   **`src/utils/transactionUtils.js`**
+    *   **Why it's needed:** This is a critical source file. The `RPC_CONFIGS` object, `getRpcConfig` function, and the `rateLimitedRpcCall` function contain the essential logic for the new `src/core/solana/rpc-config.js`.
+
+*   **`server.js`**
+    *   **Why it's needed:** The basic `app.use((err, req, res, next) => { ... })` at the end of this file is the starting point for creating the more robust `src/core/middleware/error-handler.js`.
+
+*   **`src/api/pumpController.js`** (and other controllers)
+    *   **Why it's needed:** These files serve as examples of the *current* error handling patterns (e.g., `res.status(500).json({ message: '...', error: error.message })`). This context is needed to understand what the new standardized `ApiError` class and error-handling middleware will replace.
+
+### **Step 3: Implement Feature Slices (General Instructions)**
+
+For understanding the general pattern of creating handlers and wiring up routes, the following files are the main references.
+
+*   **`src/api/walletController.js`**, **`src/api/pumpController.js`**, **`src/api/bonkController.js`**
+    *   **Why they're needed:** These files are the direct precursors to the new `.handler.js` files. They demonstrate the fundamental pattern of receiving a request (`req`), processing it, and sending a response (`res`). The new handlers will follow this pattern but with Zod validation and standardized responses.
+
+*   **`server.js`**
+    *   **Why it's needed:** This file contains the complete list of route definitions (e.g., `app.post('/api/wallets/airdrop', ...)`). It will be the primary reference for wiring up the new feature handlers in `src/app.js`.
+
+#### **Implementation Order:**
+
+**1. Wallet Feature**
+
+*   `POST /wallet/create`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/walletService.js`: Adapt the core keypair generation logic from `createBundledWalletsService`. Remove all file-saving operations. The handler should simply generate the keypairs and return them directly in the response.
+*   `GET /wallet/{publicKey}/balance/sol`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/walletService.js`: Use the logic from `getWalletBalanceService`.
+        *   `src/utils/walletUtils.js`: The core `getWalletBalance` function will be the foundation.
+
+**2. SPL Feature**
+
+*   `GET /spl/{mintAddress}/balance/{walletPublicKey}`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/walletService.js`: Adapt the logic from `getTokenBalanceService`.
+        *   `src/utils/solanaUtils.js`: The core `getTokenBalance` function contains the primary logic for finding the associated token account and fetching its balance.
+
+**3. SOL Feature**
+
+*   `POST /sol/get-transfer-transaction`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/walletService.js`: The logic for creating a `web3.SystemProgram.transfer` instruction is inside `fundChildWalletsService` and `returnFundsToMotherWalletService`. Extract this core instruction-creation logic. The new handler will create an unsigned transaction, serialize it to Base64, and return it.
+
+**4. Blockchain Feature**
+
+*   `POST /blockchain/send-transaction`
+    *   **Source Logic for Refactoring:**
+        *   `src/utils/transactionUtils.js`: Adapt the logic from `sendAndConfirmTransactionRobustly`. The new handler will receive a pre-signed, serialized transaction. It will deserialize it, send it using `connection.sendRawTransaction`, and then use the advanced confirmation logic (`confirmTransactionAdvanced`) before returning the signature.
+*   `GET /blockchain/transaction-status/{signature}`
+    *   **Source Logic for Refactoring:**
+        *   `src/utils/transactionUtils.js`: Use the logic from `checkTransactionStatus` to poll for the transaction's confirmation status and return it in the format specified by the OpenAPI contract.
+
+**5. Pump.fun Feature**
+
+*   `POST /pump/get-create-transaction`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/pumpService.js`: The logic for preparing the arguments for the Pump Portal API call is within `createAndBuyService`.
+        *   `src/services/localTransactionService.js`: The core logic for calling the `trade-local` endpoint to get the raw transaction is in `createTokenLocalTransaction`. You will adapt this to *only* fetch and return the unsigned transaction, not sign or send it.
+*   `POST /pump/get-buy-transaction`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/localTransactionService.js`: The `executeTradeLocalTransaction` function contains the exact logic for calling the Pump Portal API with a "buy" action to get a raw transaction. Adapt this function to return the unsigned transaction instead of signing and sending it.
+*   `POST /pump/get-sell-transaction`
+    *   **Source Logic for Refactoring:**
+        *   `src/services/localTransactionService.js`: The `executeTradeLocalTransaction` function also contains the logic for the "sell" action. Adapt this to return the unsigned transaction.
+
+**6. Bonk.fun Feature**
+
+*   `POST /bonk/get-create-transaction`, `get-buy-transaction`, `get-sell-transaction`
+    *   **Source Logic for Refactoring:**
+        *   Mirror the implementation for the Pump.fun feature, but adapt the logic from `src/services/bonkService.js`. The key difference is that the `pool` parameter in the API call to Pump Portal will be `"bonk"`.
+
+**7. Jupiter Feature**
+
+*   `POST /jupiter/get-quote` & `POST /jupiter/get-swap-transaction`
+    *   **Source Logic for Refactoring:**
+        *   Refer to the `volumeapi` repository for the existing Jupiter implementation. The logic for fetching quotes and swap transactions from the Jupiter API will be adapted from that repository into the new vertical slice structure.
+
+
+### **Step 4: Finalization & Documentation**
+1.  Ensure all routes are correctly registered in `app.js`.
+2.  Update the `README.md` with instructions on how to set up, configure (`.env`), and run the new service.
+3.  Add a section to the `README.md` explaining the API's philosophy (raw primitives, vanilla-first) and linking to key documentation for Express, Zod, and Solana/web3.js to aid LLM one-shot success.
+
+## 7. Definition of Done
+
+The refactor is complete when:
+-   [ ] All code from the original `src/` directory has been migrated or removed.
+-   [ ] The new repository structure is in place.
+-   [ ] The entire codebase is in modern JavaScript (ESM) with JSDoc annotations.
+-   [ ] All endpoints defined in `openapi.yaml` are implemented.
+-   [ ] All endpoints use Zod for runtime validation of their inputs.
+-   [ ] The API no longer accepts private keys for any trading-related operations.
+-   [ ] The `README.md` is updated and provides clear instructions for a new developer.

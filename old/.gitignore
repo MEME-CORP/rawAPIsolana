@@ -1,0 +1,17 @@
+monoprompting_exp_v2.2/ 
+
+--
+
+testscripts/
+isodebugging/
+
+--
+
+node_modules/
+
+--
+
+.env
+.kiro/
+.issues/
+.windsurf/

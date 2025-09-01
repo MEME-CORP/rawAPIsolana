@@ -1,0 +1,29 @@
+todo
+    • batching comment to orchestrator.md from ai studio in the message prior to last message 
+        • pump portal 15/second 
+        • rpc configs 
+    • rent comment, exactly how much it is in lamporst or sol, in phantom it seems it takes around 0.00009 for rent, but that's just a reference
+    • minimum sol in wallet to transfer anything in sol, seems to be 0.0009
+        • and same amount is required for rent (0.00089088) (still, review in the code and proportionate an exact formula)
+            • for simplicity both minimum and rent should be assumed as 0.001, but for rent it should be the exact amount 
+
+
+
+---
+
+RPC CONFIG
+
+    2.5 request per second on free 
+    40 request per second on premium
+
+
+SOLANATX
+    ```yaml
+    solana_tx_processing_rules:
+    - "Enforce minimum balance: Fail if total balance is less than 0.001 SOL."
+    - "Estimate total costs: Sum the base fee, priority fee, and rent."
+    - "  - Rent: A fixed 0.00089088 SOL is required if the recipient's account is new."
+    - "  - Fees: Calculated from compute units and microlamports, or by specifying a direct priority fee in SOL."
+    - "Auto-reduce transfer amount: If funds are insufficient for the requested amount, reduce it to what remains after all costs are covered."
+    - "Validate final amount: Fail if the calculated transfer amount after deductions is zero or less."
+    ```
