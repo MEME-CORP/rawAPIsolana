@@ -392,16 +392,14 @@ $signature
 $creatorPub  = "<CREATOR_PUBLIC_KEY>"
 $creatorPriv = "<CREATOR_PRIVATE_KEY_BASE58>"
 
-# Option A: Use your own mint keys
-# $mintPub  = "<MINT_PUBLIC_KEY>"
-# $mintPriv = "<MINT_PRIVATE_KEY_BASE58>"
+# Mint keys
+# Default: OMIT mintPublicKey/mintPrivateKey to auto-generate a new mint keypair.
+# The API will return it in data.generatedMint for you to persist securely client-side.
+# Optionally, provide your own mint keys instead:
+#   $mintPub  = "<MINT_PUBLIC_KEY>"
+#   $mintPriv = "<MINT_PRIVATE_KEY_BASE58>"
 
-# Option B: Generate a new mint keypair via wallet endpoint
-$wMint = Invoke-RestMethod -Uri "http://localhost:3000/api/v1/wallet/create" -Method POST -ContentType "application/json" -Body (@{ count = 1 } | ConvertTo-Json)
-$mintPub  = $wMint.data[0].publicKey
-$mintPriv = $wMint.data[0].privateKey
-
-# Metadata
+$creatorPub
 # If you already uploaded an image (see Upload section above), reuse it:
 # $imageUrl = $upload.data.ipfsUri
 if (-not $imageUrl) { $imageUrl = "https://raw.githubusercontent.com/github/explore/main/topics/solana/solana.png" }
@@ -412,7 +410,6 @@ $commitment = "confirmed"   # or "finalized"
 
 $body = @{
   creatorPublicKey = $creatorPub
-  mintPublicKey    = $mintPub
   name             = "My Pump Token"
   symbol           = "MPT"
   description      = "Created via Primitives API"
@@ -422,7 +419,9 @@ $body = @{
   slippageBps      = 100
   priorityFeeSol   = 0.0005
   privateKey       = $creatorPriv
-  mintPrivateKey   = $mintPriv
+  # If you want to use your own mint keys, add:
+  # mintPublicKey    = $mintPub
+  # mintPrivateKey   = $mintPriv
   commitment       = $commitment
 } | ConvertTo-Json
 
@@ -450,3 +449,4 @@ for ($i = 0; $i -lt $attempts; $i++) {
 > - All advanced responses include `unsignedTx` (Base64) for audit across create/buy/sell.
 > - Keep the call durations tight to avoid blockhash expiry. If you get an expired-blockhash error, retry immediately.
 > - For create, if `metadataUri` is omitted you must set `$env:PINATA_JWT` before running the command.
+> - For advanced create: if you omit `mintPublicKey` and `mintPrivateKey`, the API will generate a new mint keypair and return it in `data.generatedMint` (Base58). Store it securely.

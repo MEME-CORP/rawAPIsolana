@@ -303,6 +303,7 @@ paths:
                   type: string
                 mintPublicKey:
                   type: string
+                  description: "Optional. If omitted, the API generates a new mint keypair and returns it in generatedMint."
                 name:
                   type: string
                 symbol:
@@ -332,12 +333,12 @@ paths:
                   description: "Base58 encoded private key for creator (fee payer). Used only in-memory for signing."
                 mintPrivateKey:
                   type: string
-                  description: "Base58 encoded private key for mint. Used only in-memory for signing."
+                  description: "Optional. Base58 encoded private key for mint. If omitted with mintPublicKey, a new mint is generated. Used only in-memory for signing."
                 commitment:
                   type: string
                   enum: [confirmed, finalized]
                   description: "Optional. Confirmation level to wait for. Default: confirmed."
-              required: [creatorPublicKey, mintPublicKey, name, symbol, description, imageUrl, devBuyAmount, slippageBps, privateKey, mintPrivateKey]
+              required: [creatorPublicKey, name, symbol, description, imageUrl, devBuyAmount, slippageBps, privateKey]
       responses:
         '200':
           description: "Advanced create executed"
@@ -807,6 +808,16 @@ components:
             spl:
               $ref: '#/components/schemas/SplBalance'
           required: [sol, spl]
+        generatedMint:
+          type: object
+          description: "Only present for advanced create when the API auto-generates the mint keypair."
+          properties:
+            publicKey:
+              type: string
+            privateKey:
+              type: string
+              description: "Base58 encoded private key. Returned only at generation time."
+          required: [publicKey, privateKey]
       required: [signature, confirmed, commitment, unsignedTx, postBalances]
 
     ApiSuccessPumpAdvancedResult:

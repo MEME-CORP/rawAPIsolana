@@ -45,23 +45,31 @@ export async function createAdvancedHandler(req, res) {
     throw new ApiError('INVALID_INPUT', 'privateKey must be a valid Base58-encoded secret key', 400);
   }
 
-  // Decode mint signer and validate it matches mintPublicKey
+  // Decode mint signer and validate it matches mintPublicKey, or generate if omitted
   let mintSigner, mintPk;
-  try {
-    mintPk = new PublicKey(parsed.mintPublicKey);
-  } catch {
-    throw new ApiError('INVALID_INPUT', 'mintPublicKey is not valid', 400);
-  }
-  try {
-    const mintSecret = bs58.decode(parsed.mintPrivateKey);
-    if (!mintSecret || mintSecret.length < 64) throw new Error('Invalid mint secret key length');
-    mintSigner = Keypair.fromSecretKey(mintSecret);
-    if (!mintPk.equals(mintSigner.publicKey)) {
-      throw new ApiError('INVALID_INPUT', 'mintPrivateKey does not match mintPublicKey', 400);
+  let mintWasGenerated = false;
+  if (parsed.mintPublicKey && parsed.mintPrivateKey) {
+    try {
+      mintPk = new PublicKey(parsed.mintPublicKey);
+    } catch {
+      throw new ApiError('INVALID_INPUT', 'mintPublicKey is not valid', 400);
     }
-  } catch (e) {
-    if (e instanceof ApiError) throw e;
-    throw new ApiError('INVALID_INPUT', 'mintPrivateKey must be a valid Base58-encoded secret key', 400);
+    try {
+      const mintSecret = bs58.decode(parsed.mintPrivateKey);
+      if (!mintSecret || mintSecret.length < 64) throw new Error('Invalid mint secret key length');
+      mintSigner = Keypair.fromSecretKey(mintSecret);
+      if (!mintPk.equals(mintSigner.publicKey)) {
+        throw new ApiError('INVALID_INPUT', 'mintPrivateKey does not match mintPublicKey', 400);
+      }
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw new ApiError('INVALID_INPUT', 'mintPrivateKey must be a valid Base58-encoded secret key', 400);
+    }
+  } else {
+    // No mint keys provided: generate a fresh mint keypair (in-memory only)
+    mintSigner = Keypair.generate();
+    mintPk = mintSigner.publicKey;
+    mintWasGenerated = true;
   }
 
   // Ensure metadataUri (optionally upload minimal JSON to Pinata)
@@ -121,7 +129,7 @@ export async function createAdvancedHandler(req, res) {
     publicKey: parsed.creatorPublicKey,
     action: 'create',
     tokenMetadata: { name: parsed.name, symbol: parsed.symbol, uri: metadataUri },
-    mint: parsed.mintPublicKey,
+    mint: mintPk.toBase58(),
     denominatedInSol: 'true',
     amount: parsed.devBuyAmount,
     slippage: parsed.slippageBps / 100,
@@ -213,10 +221,10 @@ export async function createAdvancedHandler(req, res) {
     balanceLamports: String(lamports),
   };
 
-  let splPost = { walletPublicKey: creatorPk.toBase58(), mintAddress: parsed.mintPublicKey, uiAmount: 0, rawAmount: '0' };
+  const mintPkStr = mintPk.toBase58();
+  let splPost = { walletPublicKey: creatorPk.toBase58(), mintAddress: mintPkStr, uiAmount: 0, rawAmount: '0' };
   try {
     const ownerPk = creatorPk;
-    const mintPk = new PublicKey(parsed.mintPublicKey);
     const respTok = await connection.getParsedTokenAccountsByOwner(ownerPk, { mint: mintPk }, 'confirmed');
     if (respTok?.value?.length > 0) {
       const t = respTok.value[0].account.data.parsed.info.tokenAmount;
@@ -232,7 +240,7 @@ export async function createAdvancedHandler(req, res) {
         const n = Number(amountStr);
         uiAmount = Number.isFinite(n) && decimals >= 0 ? n / Math.pow(10, decimals) : 0;
       }
-      splPost = { walletPublicKey: ownerPk.toBase58(), mintAddress: mintPk.toBase58(), uiAmount, rawAmount: amountStr };
+      splPost = { walletPublicKey: ownerPk.toBase58(), mintAddress: mintPkStr, uiAmount, rawAmount: amountStr };
     }
   } catch (_) {}
 
@@ -247,6 +255,14 @@ export async function createAdvancedHandler(req, res) {
         sol: solPost,
         spl: splPost,
       },
+      ...(mintWasGenerated
+        ? {
+            generatedMint: {
+              publicKey: mintPkStr,
+              privateKey: bs58.encode(mintSigner.secretKey),
+            },
+          }
+        : {}),
     },
   });
 }
