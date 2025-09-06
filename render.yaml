@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: blockchain-primitives-api
+    env: node
+    plan: starter # Or another plan like 'standard'
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SOLANA_RPC_URL
+        # Set this value in the Render Dashboard under Environment
+        # 'sync: false' prevents the dashboard value from being overwritten by this file
+        sync: false 
+      - key: PINATA_JWT
+        # Set this value in the Render Dashboard as well
+        sync: false
