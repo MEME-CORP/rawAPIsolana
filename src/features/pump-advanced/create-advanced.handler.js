@@ -121,14 +121,63 @@ export async function createAdvancedHandler(req, res) {
     if (!pinJson || !pinJson.IpfsHash) {
       throw new ApiError('UPSTREAM_ERROR', 'Pinata did not return IpfsHash', 502);
     }
-    metadataUri = `ipfs://${pinJson.IpfsHash}`;
+    // Prefer HTTP gateway URL for better downstream compatibility
+    metadataUri = `https://ipfs.io/ipfs/${pinJson.IpfsHash}`;
+  }
+
+  // Normalize provided metadataUri if using ipfs:// to an HTTP gateway for Pump Portal
+  let uriForPump = metadataUri;
+  if (typeof uriForPump === 'string' && uriForPump.startsWith('ipfs://')) {
+    uriForPump = `https://ipfs.io/ipfs/${uriForPump.slice('ipfs://'.length)}`;
+  }
+
+  // Lightweight availability check to mitigate IPFS propagation lag.
+  // Try ipfs.io first, then pinata gateway. Use the first that responds OK.
+  async function checkUrlOk(url) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 2500);
+    try {
+      const head = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      if (head.ok) return true;
+    } catch {}
+    try {
+      const get = await fetch(url, { method: 'GET', signal: controller.signal });
+      return get.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  const candidates = [];
+  if (typeof uriForPump === 'string') {
+    candidates.push(uriForPump);
+    const cidMatch = uriForPump.match(/ipfs\.(?:io|gateway\.pinata\.cloud)\/ipfs\/([^/?#]+)/);
+    if (!cidMatch && uriForPump.startsWith('https://ipfs.io/ipfs/')) {
+      // already ipfs.io
+      const cid = uriForPump.slice('https://ipfs.io/ipfs/'.length).split('/')[0];
+      candidates.push(`https://gateway.pinata.cloud/ipfs/${cid}`);
+    } else if (cidMatch) {
+      const cid = cidMatch[1];
+      candidates.push(`https://ipfs.io/ipfs/${cid}`);
+      candidates.push(`https://gateway.pinata.cloud/ipfs/${cid}`);
+    }
+  }
+
+  for (const url of candidates) {
+    // Select the first accessible candidate
+    try {
+      const ok = await checkUrlOk(url);
+      if (ok) { uriForPump = url; break; }
+    } catch {}
   }
 
   // Request unsigned create tx from Pump Portal
   const body = {
     publicKey: parsed.creatorPublicKey,
     action: 'create',
-    tokenMetadata: { name: parsed.name, symbol: parsed.symbol, uri: metadataUri },
+    tokenMetadata: { name: parsed.name, symbol: parsed.symbol, uri: uriForPump },
     mint: mintPk.toBase58(),
     denominatedInSol: 'true',
     amount: parsed.devBuyAmount,
