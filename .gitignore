@@ -1,7 +1,7 @@
 node_modules/
 
 .iteration/ //fix
-old //fix
+old 
 .env 
 .windsurf //fix
 command-test.md //fix

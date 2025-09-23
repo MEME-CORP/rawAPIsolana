@@ -30,6 +30,17 @@ const app = express();
 // Allow larger JSON payloads for base64 images (Upload feature)
 app.use(express.json({ limit: '10mb' }));
 
+// Minimal request logging for Render (does not log bodies or secrets)
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+  });
+  next();
+});
+
 // Base router for /api/v1 per OpenAPI
 const v1 = express.Router();
 

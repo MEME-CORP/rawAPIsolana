@@ -16,6 +16,12 @@ export function errorHandler(err, req, res, next) {
   }
 
   const status = apiErr.status ?? codeToStatus(apiErr.code);
+  // Minimal sanitized server-side error log (no stacks or secrets)
+  try {
+    console.error(
+      `[${new Date().toISOString()}] ERROR ${req.method} ${req.originalUrl} -> ${status} code=${apiErr.code} message=${apiErr.message}`
+    );
+  } catch {}
   res.status(status).json({ ok: false, error: { code: apiErr.code, message: apiErr.message } });
 }
 

@@ -25,6 +25,10 @@ const DEFAULT_PRIORITY_FEE_SOL = 0.0005; // internal default
  */
 export async function createAdvancedHandler(req, res) {
   const parsed = schema.parse(req.body);
+  // Minimal high-level log for Render visibility (no secrets)
+  console.log(
+    `[ADVANCED][CREATE] Start - creator=${parsed.creatorPublicKey} name=${parsed.name} symbol=${parsed.symbol}`
+  );
 
   // Decode signer and validate it matches creatorPublicKey
   let signer, creatorPk;
@@ -71,6 +75,13 @@ export async function createAdvancedHandler(req, res) {
     mintPk = mintSigner.publicKey;
     mintWasGenerated = true;
   }
+
+  // Log which mint will be used (do not log any private key)
+  try {
+    console.log(
+      `[ADVANCED][CREATE] Mint selected - mint=${mintPk.toBase58()} ${mintWasGenerated ? '(generated)' : '(provided)'}`
+    );
+  } catch {}
 
   // Ensure metadataUri (optionally upload minimal JSON to Pinata)
   let metadataUri = parsed.metadataUri;
@@ -204,6 +215,11 @@ export async function createAdvancedHandler(req, res) {
   const buf = Buffer.from(await resp.arrayBuffer());
   const unsignedTx = buf.toString('base64');
 
+  // Log that an unsigned transaction was received (length only)
+  console.log(
+    `[ADVANCED][CREATE] Unsigned tx received for mint=${mintPk.toBase58()} (base64Length=${unsignedTx.length})`
+  );
+
   // Sign (legacy or v0)
   let signedRaw;
   try {
@@ -292,6 +308,12 @@ export async function createAdvancedHandler(req, res) {
       splPost = { walletPublicKey: ownerPk.toBase58(), mintAddress: mintPkStr, uiAmount, rawAmount: amountStr };
     }
   } catch (_) {}
+
+  // Final success summary log
+  console.log(
+    `[ADVANCED][CREATE] Success - mint=${mintPkStr} signature=${signature} confirmed=${confirmed} commitment=${commitment}` +
+      (mintWasGenerated ? ' (generated mint returned in response)' : '')
+  );
 
   return res.status(200).json({
     ok: true,
